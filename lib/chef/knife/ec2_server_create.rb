@@ -51,6 +51,12 @@ class Chef
         :description => "The AMI for the server",
         :proc => Proc.new { |i| Chef::Config[:knife][:image] = i }
 
+      option :delta_image,
+        :long => "--delta-image",
+        :description => "Creates base delta image on successful chef run for infrastructure changes",
+        :boolean => true,
+        :default => false
+
       option :iam_instance_profile,
         :long => "--iam-profile NAME",
         :description => "The IAM instance profile to apply to this instance."
@@ -415,6 +421,18 @@ class Chef
         msg_pair("Environment", config[:environment] || '_default')
         msg_pair("Run List", (config[:run_list] || []).join(', '))
         msg_pair("JSON Attributes",config[:json_attributes]) unless !config[:json_attributes] || config[:json_attributes].empty?
+
+        if config[:delta_image]
+          msg_pair("Preparing deplta image...", "")
+          Net::SSH.start(@server.public_ip_address, config[:ssh_user], {:keys => config[:identity_file], :keys_only => true}) do |ssh|
+            output = ssh.exec!("hostname; sudo rm -rf /etc/chef; sudo rm -rf /var/chef")
+            msg_pair("Done", output)
+          end
+          msg_pair("Creating deplta Image", @server.dns_name+"-"+config[:environment])
+          delta_img = connection.create_image(@server.id, @server.dns_name+"-"+config[:environment], false )
+          msg_pair("Deplta Image ID", delta_img)
+        end
+
       end
 
       def bootstrap_common_params(bootstrap)
